@@ -1,0 +1,268 @@
+<title>Buffered vs No-Wait Flow Shop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: one reading column; two full-width Gantt panels on one shared time scale, summary below. */
+:root {
+  --bg: #f6f6f3; --surface: #fcfcfb; --fg: #16181a; --fg2: #4f5257; --muted: #8a8c8f;
+  --rule: #dfe0dc; --grid: #e7e7e3; --idle: #ecebe7;
+  --j1: #2a78d6; --j2: #eb6834; --j3: #1baf7a; --bar-ink: #0b0b0b;
+  --hold: #d03b3b; --hold-bg: rgba(208,59,59,.14);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121313; --surface: #1a1a19; --fg: #f0efec; --fg2: #c3c2b7; --muted: #8f8e88;
+  --rule: #2f2f2d; --grid: #2a2a28; --idle: #262624;
+  --j1: #3987e5; --j2: #d95926; --j3: #199e70; --bar-ink: #0b0b0b;
+  --hold: #e66767; --hold-bg: rgba(230,103,103,.16); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121313; --surface: #1a1a19; --fg: #f0efec; --fg2: #c3c2b7; --muted: #8f8e88;
+  --rule: #2f2f2d; --grid: #2a2a28; --idle: #262624;
+  --j1: #3987e5; --j2: #d95926; --j3: #199e70; --bar-ink: #0b0b0b;
+  --hold: #e66767; --hold-bg: rgba(230,103,103,.16); color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 28px; }
+header { display: grid; gap: 8px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg2); margin: 0; }
+h1 { font-size: clamp(26px, 4.2vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+.lede { margin: 0; color: var(--fg2); max-width: 66ch; }
+h2 { font-size: 18px; margin: 0; font-weight: 600; text-wrap: balance; }
+.facts { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.fact { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.fact .k { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg2); }
+.fact .v { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.fact .v small { font-size: 15px; font-weight: 500; color: var(--fg2); }
+.fact .d { font-size: 13px; color: var(--fg2); }
+.delta { color: var(--hold); font-weight: 600; }
+table.pt { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; font-size: 14px; }
+table.pt th, table.pt td { padding: 3px 8px; text-align: center; border-bottom: 1px solid var(--rule); }
+table.pt th { font-weight: 500; color: var(--fg2); font-size: 12.5px; }
+table.pt td:first-child, table.pt th:first-child { text-align: left; padding-left: 0; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 18px 18px 10px; display: grid; gap: 6px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; align-items: baseline; }
+.util { font-size: 13px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.panel p.note { margin: 0; font-size: 14px; color: var(--fg2); max-width: 75ch; }
+.chart { overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--fg2); padding: 0 2px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { display: inline-block; width: 16px; height: 11px; border-radius: 2px; }
+.summary { display: grid; gap: 10px; }
+.summary ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 74ch; }
+.summary li::marker { color: var(--muted); }
+.aside { font-size: 14px; color: var(--fg2); border-left: 3px solid var(--rule); padding: 4px 0 4px 14px; max-width: 74ch; margin: 0; }
+details { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 16px; }
+summary { cursor: pointer; font-weight: 500; }
+summary:focus-visible { outline: 2px solid var(--j1); outline-offset: 3px; border-radius: 3px; }
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 28px; margin-top: 12px; }
+.tables > div { min-width: 0; overflow-x: auto; }
+.tables h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
+#tip { position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 12.5px; font-family: var(--mono);
+  padding: 6px 9px; border-radius: 4px; white-space: nowrap; z-index: 20; }
+svg text { font-family: var(--sans); }
+svg .hit { cursor: default; }
+svg .hit:hover > rect.op { stroke: var(--fg); stroke-width: 1.5; }
+@media (max-width: 640px) { .facts { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Flow shop scheduling · 3 jobs × 3 machines</p>
+    <h1>Buffered vs No-Wait Flow Shop</h1>
+    <p class="lede">The same three jobs run in the same order, J2 → J1 → J3, on machines M1 → M2 → M3. In the first chart, a job can wait between machines. In the second chart, a job must move through all three machines without a stop.</p>
+  </header>
+
+  <section class="facts" aria-label="Instance and key results">
+    <div class="fact">
+      <div class="k">Processing times</div>
+      <table class="pt">
+        <thead><tr><th>Job</th><th>M1</th><th>M2</th><th>M3</th><th>Total</th></tr></thead>
+        <tbody id="pt"></tbody>
+      </table>
+    </div>
+    <div class="fact">
+      <div class="k">Makespan C<sub>max</sub></div>
+      <div class="v">10 → 12 <small>time units</small></div>
+      <div class="d"><span class="delta">+2 (+20%)</span> with the no-wait rule. Both values are optimal for their problem.</div>
+    </div>
+    <div class="fact">
+      <div class="k">Overall machine utilisation</div>
+      <div class="v">70% → 58%</div>
+      <div class="d">The total work is 21 machine-time units in both cases. It now spreads over 36 units of capacity instead of 30.</div>
+    </div>
+  </section>
+
+  <div class="legend" aria-label="Legend">
+    <span><i style="background:var(--j1)"></i>J1</span>
+    <span><i style="background:var(--j2)"></i>J2</span>
+    <span><i style="background:var(--j3)"></i>J3</span>
+    <span><svg width="16" height="11" aria-hidden="true"><rect x=".75" y=".75" width="14.5" height="9.5" fill="url(#hatch-J1)" stroke="var(--j1)" stroke-width="1.5"/></svg>Waiting in buffer</span>
+    <span><i style="background:var(--hold-bg);outline:1.5px dashed var(--hold);outline-offset:-1.5px"></i>Held before M1</span>
+    <span><i style="background:var(--idle)"></i>Machine idle</span>
+    <span><svg width="22" height="11" aria-hidden="true"><line x1="1" y1="5.5" x2="15" y2="5.5" stroke="var(--fg2)" stroke-width="1.5"/><path d="M14 2 L21 5.5 L14 9 Z" fill="var(--fg2)"/></svg>Job moves to next machine</span>
+  </div>
+
+  <section class="panel" aria-labelledby="h-std">
+    <div class="panel-head"><h2 id="h-std">1 · Standard flow shop: buffers allowed</h2><span class="util" id="u-std"></span></div>
+    <p class="note">J1 finishes on M1 at t = 3, but M2 is busy with J2 until t = 4. J1 waits 1 unit in the buffer. The same thing happens before M3 (t = 7 → 8). The machines stay busy, so C<sub>max</sub> = 10.</p>
+    <div class="chart" id="c-std"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-nw">
+    <div class="panel-head"><h2 id="h-nw">2 · No-wait flow shop: a started job never stops</h2><span class="util" id="u-nw"></span></div>
+    <p class="note">M1 is free at t = 1, but J1 cannot start then: it would arrive at M2 while J2 is still there. J1 is held for 2 units and starts at t = 3. All transitions have zero gap (vertical links). The machines absorb the delay as idle time, so C<sub>max</sub> = 12.</p>
+    <div class="chart" id="c-nw"></div>
+  </section>
+
+  <section class="summary" aria-labelledby="h-sum">
+    <h2 id="h-sum">What the no-wait rule changes</h2>
+    <ul>
+      <li><strong>The wait does not go away. It moves.</strong> In the standard shop, J1 waits 2 units in total, in the buffers between machines. In the no-wait shop, J1 waits the same 2 units, but before it enters M1.</li>
+      <li><strong>The makespan increases from 10 to 12 (+20%).</strong> A held job delays every job behind it. J3 also starts 2 units later on M1, and the line finishes later.</li>
+      <li><strong>Utilisation decreases on all machines.</strong> M1: 70% → 58%. M2: 80% → 67%. M3: 60% → 50%. The work stays the same, but the machines stand idle while the next job is held.</li>
+      <li><strong>Machine idle time replaces buffer time.</strong> M2 is idle 4 → 5 and 8 → 9, and M3 is idle 9 → 11. In the standard shop, a buffer covers these gaps.</li>
+      <li><strong>The order of jobs is more important without buffers.</strong> The no-wait start delay between two jobs depends only on that pair. Thus the problem becomes a travelling-salesman problem over the jobs, and a bad order costs more.</li>
+      <li><strong>Why use no-wait?</strong> Some processes do not allow a stop: hot steel, chemical reactions, food and pharmaceutical lines. There, the extra makespan is the cost of product quality.</li>
+    </ul>
+    <p class="aside">About the example times: with J1 = [2, 3, 1], J2 = [1, 2, 4], J3 = [3, 1, 2], both versions reach C<sub>max</sub> = 10 with the order J2 → J1 → J3, so no-wait costs nothing there. This page changes only J2 and J3, so that the no-wait penalty is visible. The size of the penalty depends on the data.</p>
+  </section>
+
+  <details>
+    <summary>Show both schedules as tables</summary>
+    <div class="tables" id="tables"></div>
+  </details>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const D = {"P": {"J1": [2, 3, 1], "J2": [1, 3, 4], "J3": [4, 2, 1]}, "seq": ["J2", "J1", "J3"], "std": {"ops": [{"job": "J2", "machine": 0, "start": 0, "end": 1}, {"job": "J2", "machine": 1, "start": 1, "end": 4}, {"job": "J2", "machine": 2, "start": 4, "end": 8}, {"job": "J1", "machine": 0, "start": 1, "end": 3}, {"job": "J1", "machine": 1, "start": 4, "end": 7}, {"job": "J1", "machine": 2, "start": 8, "end": 9}, {"job": "J3", "machine": 0, "start": 3, "end": 7}, {"job": "J3", "machine": 1, "start": 7, "end": 9}, {"job": "J3", "machine": 2, "start": 9, "end": 10}], "cmax": 10, "idle": [{"machine": 0, "start": 7, "end": 10}, {"machine": 1, "start": 0, "end": 1}, {"machine": 1, "start": 9, "end": 10}, {"machine": 2, "start": 0, "end": 4}], "util": [[0.7, 0.8, 0.6], 0.7], "waits": [{"job": "J1", "after": 1, "start": 3, "end": 4}, {"job": "J1", "after": 2, "start": 7, "end": 8}]}, "nw": {"ops": [{"job": "J2", "machine": 0, "start": 0, "end": 1}, {"job": "J2", "machine": 1, "start": 1, "end": 4}, {"job": "J2", "machine": 2, "start": 4, "end": 8}, {"job": "J1", "machine": 0, "start": 3, "end": 5}, {"job": "J1", "machine": 1, "start": 5, "end": 8}, {"job": "J1", "machine": 2, "start": 8, "end": 9}, {"job": "J3", "machine": 0, "start": 5, "end": 9}, {"job": "J3", "machine": 1, "start": 9, "end": 11}, {"job": "J3", "machine": 2, "start": 11, "end": 12}], "cmax": 12, "idle": [{"machine": 0, "start": 1, "end": 3}, {"machine": 0, "start": 9, "end": 12}, {"machine": 1, "start": 0, "end": 1}, {"machine": 1, "start": 4, "end": 5}, {"machine": 1, "start": 8, "end": 9}, {"machine": 1, "start": 11, "end": 12}, {"machine": 2, "start": 0, "end": 4}, {"machine": 2, "start": 9, "end": 11}], "util": [[0.5833333333333334, 0.6666666666666666, 0.5], 0.5833333333333334], "holds": [{"job": "J1", "start": 1, "end": 3}]}};
+const JOBS = ["J1", "J2", "J3"], MACH = ["M1", "M2", "M3"];
+const NS = "http://www.w3.org/2000/svg";
+const W = 900, L = 104, R = 72, XMAX = 13, TOP = 30, MH = 40, BH = 24, GAP = 6;
+const x = t => L + (W - L - R) * t / XMAX;
+const ROWS = [["M1","m",0],["Buffer 1→2","b",1],["M2","m",1],["Buffer 2→3","b",2],["M3","m",2]];
+const Y = {}; let yy = TOP;
+for (const [n,k,i] of ROWS) { const h = k === "m" ? MH : BH; Y[k+i] = [yy, h]; yy += h + GAP; }
+const PLOT_BOTTOM = yy - GAP, H = PLOT_BOTTOM + 44;
+
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function defs(svg) {
+  const d = el("defs", {}, svg);
+  for (const j of JOBS) {
+    const p = el("pattern", {id: "hatch-" + j, width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"}, d);
+    el("rect", {width: 6, height: 6, fill: "var(--surface)"}, p);
+    el("line", {x1: 0, y1: 0, x2: 0, y2: 6, style: `stroke:var(--${j.toLowerCase()});stroke-width:2`}, p);
+    const m = el("marker", {id: "arr-" + j, viewBox: "0 0 8 8", refX: 7.5, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse"}, d);
+    el("path", {d: "M0 0 L8 4 L0 8 Z", style: `fill:var(--${j.toLowerCase()})`}, m);
+  }
+}
+const tip = document.getElementById("tip");
+function hover(g, text) {
+  g.addEventListener("pointermove", e => { tip.textContent = text; tip.hidden = false;
+    const r = tip.getBoundingClientRect();
+    let lx = e.clientX + 14; if (lx + r.width > innerWidth - 8) lx = e.clientX - r.width - 14;
+    tip.style.left = lx + "px"; tip.style.top = (e.clientY - r.height - 12) + "px"; });
+  g.addEventListener("pointerleave", () => { tip.hidden = true; });
+}
+const fmt = (a, b) => `${a} → ${b} (${b - a} unit${b - a === 1 ? "" : "s"})`;
+
+function draw(target, S, kind) {
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": kind === "std" ? "Gantt chart of the standard flow shop schedule, makespan 10" : "Gantt chart of the no-wait flow shop schedule, makespan 12"});
+  defs(svg);
+  // grid + axis
+  for (let t = 0; t <= XMAX; t++) {
+    el("line", {x1: x(t), x2: x(t), y1: TOP - 6, y2: PLOT_BOTTOM, style: "stroke:var(--grid);stroke-width:1"}, svg);
+    el("text", {x: x(t), y: PLOT_BOTTOM + 18, "text-anchor": "middle", "font-size": 12, style: "fill:var(--fg2)"}, svg, t);
+  }
+  el("text", {x: (x(0) + x(XMAX)) / 2, y: PLOT_BOTTOM + 38, "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)"}, svg, "Time (units)");
+  // row labels + idle
+  for (const [n, k, i] of ROWS) {
+    const [y0, h] = Y[k + i];
+    el("text", {x: L - 12, y: y0 + h / 2 + 4.5, "text-anchor": "end", "font-size": k === "m" ? 14 : 11.5,
+      "font-weight": k === "m" ? 600 : 400, style: `fill:var(${k === "m" ? "--fg" : "--muted"})`}, svg, n);
+  }
+  for (const g of S.idle) {
+    const [y0, h] = Y["m" + g.machine];
+    const gg = el("g", {class: "hit"}, svg);
+    el("rect", {x: x(g.start), y: y0, width: x(g.end) - x(g.start), height: h, style: "fill:var(--idle)"}, gg);
+    hover(gg, `${MACH[g.machine]} idle · ${fmt(g.start, g.end)}`);
+  }
+  // no-wait: empty buffer notes, holds
+  if (kind === "nw") {
+    for (const i of [1, 2]) { const [y0, h] = Y["b" + i];
+      el("text", {x: x(1.15), y: y0 + h / 2 + 4, "font-size": 11.5, "font-style": "italic", style: "fill:var(--muted)"}, svg, "empty: buffers not allowed"); }
+  }
+  // operations
+  for (const o of S.ops) {
+    const [y0, h] = Y["m" + o.machine], c = `var(--${o.job.toLowerCase()})`;
+    const g = el("g", {class: "hit"}, svg);
+    el("rect", {class: "op", x: x(o.start) + 1, y: y0, width: x(o.end) - x(o.start) - 2, height: h, rx: 3, style: `fill:${c}`}, g);
+    el("text", {x: (x(o.start) + x(o.end)) / 2, y: y0 + h / 2 + 5, "text-anchor": "middle", "font-size": 14, "font-weight": 700, style: "fill:var(--bar-ink)"}, g, o.job);
+    hover(g, `${o.job} on ${MACH[o.machine]} · ${fmt(o.start, o.end)}`);
+  }
+  if (kind === "std") for (const w of S.waits) {
+    const [y0, h] = Y["b" + w.after], c = `var(--${w.job.toLowerCase()})`;
+    const g = el("g", {class: "hit"}, svg);
+    el("rect", {x: x(w.start) + 1, y: y0 + 1, width: x(w.end) - x(w.start) - 2, height: h - 2, fill: `url(#hatch-${w.job})`, style: `stroke:${c};stroke-width:1.5`}, g);
+    el("text", {x: x(w.start) - 8, y: y0 + h / 2 + 4.5, "text-anchor": "end", "font-size": 12.5, "font-weight": 600, style: "fill:var(--fg)"}, g, `${w.job} waits ${w.end - w.start}`);
+    hover(g, `${w.job} in buffer before ${MACH[w.after]} · ${fmt(w.start, w.end)}`);
+  }
+  if (kind === "nw") for (const hd of S.holds) {
+    const [y0, h] = Y["m0"];
+    const g = el("g", {class: "hit"}, svg);
+    el("rect", {x: x(hd.start) + 2, y: y0 + 2, width: x(hd.end) - x(hd.start) - 4, height: h - 4, rx: 3, style: "fill:var(--hold-bg);stroke:var(--hold);stroke-width:1.75;stroke-dasharray:5 3"}, g);
+    el("text", {x: (x(hd.start) + x(hd.end)) / 2, y: y0 + h / 2 + 4.5, "text-anchor": "middle", "font-size": 12.5, "font-weight": 700, style: "fill:var(--hold)"}, g, `${hd.job} held ${hd.end - hd.start}`);
+    hover(g, `M1 free, ${hd.job} held · ${fmt(hd.start, hd.end)}`);
+  }
+  // links between consecutive operations of a job
+  const by = {};
+  for (const o of S.ops) (by[o.job] ||= {})[o.machine] = o;
+  for (const j of JOBS) for (const i of [0, 1]) {
+    const a = by[j][i], b = by[j][i + 1];
+    const ya = Y["m" + i][0] + Y["m" + i][1], yb = Y["m" + (i + 1)][0];
+    el("line", {x1: x(a.end), y1: ya + 1, x2: x(b.start), y2: yb - 1, "marker-end": `url(#arr-${j})`,
+      style: `stroke:var(--${j.toLowerCase()});stroke-width:1.6`}, svg);
+  }
+  // makespan
+  const cx = x(S.cmax);
+  el("line", {x1: cx, x2: cx, y1: TOP - 14, y2: PLOT_BOTTOM, style: "stroke:var(--fg);stroke-width:2"}, svg);
+  const t = el("text", {x: cx + 6, y: TOP - 8, "font-size": 13.5, "font-weight": 700, style: "fill:var(--fg)"}, svg);
+  el("tspan", {}, t, "C"); el("tspan", {"font-size": 10, dy: 3}, t, "max"); el("tspan", {dy: -3}, t, ` = ${S.cmax}`);
+  if (kind === "nw") {
+    const c0 = x(D.std.cmax);
+    el("line", {x1: c0, x2: c0, y1: TOP - 14, y2: PLOT_BOTTOM, style: "stroke:var(--muted);stroke-width:1.3;stroke-dasharray:4 4"}, svg);
+    el("text", {x: c0 - 6, y: TOP - 8, "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)"}, svg, `standard ${D.std.cmax}`);
+    el("rect", {x: c0, y: PLOT_BOTTOM - 1, width: cx - c0, height: 5, style: "fill:var(--hold)"}, svg);
+    el("text", {x: (c0 + cx) / 2, y: TOP - 8, "text-anchor": "middle", "font-size": 12.5, "font-weight": 700, style: "fill:var(--hold)"}, svg, `+${S.cmax - D.std.cmax}`);
+  }
+  document.getElementById(target).appendChild(svg);
+}
+
+const pct = v => Math.round(v * 100) + "%";
+function util(id, S) {
+  const [m, t] = S.util;
+  document.getElementById(id).textContent = `Utilisation  M1 ${pct(m[0])} · M2 ${pct(m[1])} · M3 ${pct(m[2])} · overall ${pct(t)}`;
+}
+// processing-time table
+document.getElementById("pt").innerHTML = JOBS.map(j =>
+  `<tr><td><span class="sw" style="background:var(--${j.toLowerCase()})"></span>${j}</td>${D.P[j].map(v => `<td>${v}</td>`).join("")}<td>${D.P[j].reduce((a, b) => a + b)}</td></tr>`).join("");
+draw("c-std", D.std, "std"); draw("c-nw", D.nw, "nw");
+util("u-std", D.std); util("u-nw", D.nw);
+// schedule tables
+document.getElementById("tables").innerHTML = [["Standard flow shop", D.std], ["No-wait flow shop", D.nw]].map(([name, S]) => {
+  const rows = D.seq.map(j => `<tr><td>${j}</td>${[0,1,2].map(i => { const o = S.ops.find(o => o.job === j && o.machine === i); return `<td>${o.start}–${o.end}</td>`; }).join("")}</tr>`).join("");
+  return `<div><h3>${name} · C<sub>max</sub> = ${S.cmax}</h3><table class="pt"><thead><tr><th>Job</th><th>M1</th><th>M2</th><th>M3</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}).join("");
+</script>
