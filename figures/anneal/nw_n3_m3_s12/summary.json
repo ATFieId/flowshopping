@@ -1,0 +1,55 @@
+{
+  "name": "nw_n3_m3_s12",
+  "n": 3,
+  "m": 3,
+  "qubits": 9,
+  "p": [
+    [
+      6,
+      3,
+      9
+    ],
+    [
+      9,
+      1,
+      2
+    ],
+    [
+      2,
+      2,
+      6
+    ]
+  ],
+  "P": 3.0,
+  "gamma_max": 6.0,
+  "optimal_makespan": 22,
+  "optimal_sequences": [
+    [
+      "J3",
+      "J1",
+      "J2"
+    ]
+  ],
+  "h_star": 5.0,
+  "threshold_ground_P": 2.5,
+  "min_gap": 0.5046175868658054,
+  "min_gap_gamma": 0.47797692889198734,
+  "anneal": [
+    {
+      "T": 2.0,
+      "P(optimal schedule)": 0.13413403917002997,
+      "P(any feasible schedule)": 0.13855029954414158
+    },
+    {
+      "T": 10.0,
+      "P(optimal schedule)": 0.3059496397198755,
+      "P(any feasible schedule)": 0.30597802367244936
+    },
+    {
+      "T": 50.0,
+      "P(optimal schedule)": 0.8304583039746013,
+      "P(any feasible schedule)": 0.8304587428243939
+    }
+  ],
+  "seconds": 3.7
+}

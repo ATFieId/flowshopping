@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from src import example_instance, nowait, perturbation as pt, quantum, qubo, random_instance, schedules, spectrum  # noqa: E402
+from src import example_instance, generator, nowait, perturbation as pt, quantum, qubo, random_instance, schedules, spectrum  # noqa: E402
 
 RANDOM = [random_instance(n, m, seed=s) for s in range(4) for n, m in ((3, 3), (4, 3), (4, 5), (5, 4))]
 EX = example_instance()
@@ -177,6 +177,49 @@ def test_ising_conversion():
     S = 1 - 2 * X.astype(float)
     E = off + S @ h + np.einsum("sa,ac,sc->s", S, J, S)
     assert np.allclose(E, H.energy(X))
+
+
+
+# ------------------------------------------------- generator and annealing
+def test_generator_unique_optimum_and_json_roundtrip(tmp_path=None):
+    import tempfile
+    inst = generator.generate_instance(3, 3, seed=5)
+    assert len(nowait.optimum(inst)[1]) == 1
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "x.json")
+        generator.save_instance(inst, path, seed=5)
+        back = generator.load_instance(path)
+    assert np.array_equal(back.p, inst.p) and back.name == inst.name
+    for bad in (1, 5):
+        try:
+            generator.generate_instance(bad, 3)
+            raise AssertionError("n out of range was accepted")
+        except ValueError:
+            pass
+
+
+def test_sparse_sweep_matches_dense():
+    tf = quantum.TransverseFieldHamiltonian(qubo.problem_qubo(EX, 3.0))
+    gs = np.linspace(0, 4, 9)
+    dense = tf.sweep(gs, k=5)["levels"]
+    old, quantum.DENSE_LIMIT = quantum.DENSE_LIMIT, 16      # force the continuation solver
+    try:
+        sparse = tf.sweep(gs, k=5)["levels"]
+    finally:
+        quantum.DENSE_LIMIT = old
+    assert np.allclose(dense, sparse, atol=1e-8)
+
+
+def test_anneal_matches_exact_propagator():
+    from scipy.sparse.linalg import expm_multiply
+    tf = quantum.TransverseFieldHamiltonian(qubo.problem_qubo(EX, 3.0))
+    G0, T, steps = 6.0, 2.0, 400
+    r = tf.anneal(G0, T, dt=0.005)
+    psi = tf.ground_state(G0).astype(complex)
+    for i in range(steps):
+        psi = expm_multiply(-1j * (T / steps) * tf.matrix(G0 * (1 - (i + 0.5) / steps)), psi)
+    assert np.isclose(np.linalg.norm(r["state"]), 1)
+    assert abs(np.vdot(psi, r["state"])) ** 2 > 0.9999
 
 
 if __name__ == "__main__":

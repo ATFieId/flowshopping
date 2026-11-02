@@ -3,6 +3,7 @@
 * :func:`plot_gantt_comparison` - the standard vs no-wait Gantt figure (report Figure 1).
 * :func:`plot_low_spectrum`     - low levels of H(Gamma) and ground-state weights.
 * :func:`plot_penalty_levels`   - classical spectrum grouped by penalty level.
+* :func:`plot_anneal`           - annealing spectrum (full and low levels) and success probability.
 """
 from __future__ import annotations
 
@@ -112,9 +113,9 @@ def plot_gantt_comparison(inst: Instance, seq: Sequence[int], path: str | None =
     names = inst.job_names
     rows, ypos, ymin = _row_layout(inst.m)
     c1, c2 = std.cmax, nw.cmax
-    xmax = max(c1, c2) + 1
+    xmax = max(c1, c2) + 3                          # room for the C_max label
 
-    fig, axes = plt.subplots(2, 1, figsize=(11, 2.8 * inst.m), facecolor=SURF)
+    fig, axes = plt.subplots(2, 1, figsize=(11, max(2.8 * inst.m, 8.4)), facecolor=SURF)
     plt.subplots_adjust(left=0.11, right=0.97, top=0.85, bottom=0.12, hspace=0.38)
     order = " → ".join(names[j] for j in seq)
     fig.suptitle(f"Same jobs, same order ({order}): buffered flow shop vs no-wait flow shop",
@@ -146,7 +147,7 @@ def plot_gantt_comparison(inst: Instance, seq: Sequence[int], path: str | None =
         y0, h = ypos[("m", 0)]
         ax.add_patch(Rectangle((hd.start + 0.03, y0 + 0.04), hd.end - hd.start - 0.06, h - 0.08,
                                facecolor="none", edgecolor=HOLD, linestyle=(0, (4, 2)), lw=1.6, zorder=4))
-        ax.text((hd.start + hd.end) / 2, y0 + h / 2, f"{names[hd.job]} held\n{hd.end - hd.start} units",
+        ax.text((hd.start + hd.end) / 2, y0 + h / 2, f"{names[hd.job]} held\n{hd.end - hd.start} unit{'s' if hd.end - hd.start > 1 else ''}",
                 ha="center", va="center", fontsize=8.5, fontweight="bold", color=HOLD, zorder=5,
                 linespacing=1.0)
     note_x = int(inst.p[seq[0], 0]) + 0.15          # just right of the first M1 -> M2 arrow
@@ -231,6 +232,85 @@ def plot_penalty_levels(spec, P: float, title: str = "", path: str | None = None
     ax.tick_params(colors=INK2, length=0)
     ax.legend(frameon=False, fontsize=9)
     ax.set_title(title, loc="left", fontsize=12.5, fontweight="bold", color=INK)
+    fig.tight_layout()
+    if path:
+        fig.savefig(path, dpi=200, facecolor=SURF)
+    return fig
+
+
+def _clean_axes(ax):
+    ax.set_facecolor(SURF)
+    ax.grid(color=GRID, lw=0.6)
+    for sp_ in ax.spines.values():
+        sp_.set_visible(False)
+    ax.tick_params(colors=INK2, length=0)
+
+
+def plot_anneal(sweep: dict, runs: Sequence[dict] = (), low: int = 6, degeneracy: int = 1,
+                target: str = "optimal schedule", gap: tuple[float, float] | None = None,
+                title: str = "", path: str | None = None):
+    """Annealing figure, G decreasing from left to right (the direction of the anneal).
+
+    * Full spectrum ``E_k(G)`` (only when ``sweep`` holds more than ``low`` levels).
+    * Low eigenspace: ``E_k - E_0`` for the ``low`` lowest levels, with the minimum gap
+      from the ground level to the first level outside the ``degeneracy``-fold optimum.
+    * Probability of ``target``: ground-state weight (adiabatic limit) and the
+      result of each annealing run in ``runs`` (from ``TransverseFieldHamiltonian.anneal``).
+
+    ``gap = (gamma, value)`` marks a refined minimum gap; by default it is read off the grid.
+    """
+    import numpy as np
+    from .quantum import min_gap
+
+    g, L = sweep["gammas"], sweep["levels"]
+    full = L.shape[1] > low
+    nrows = 3 if full else 2
+    fig, axes = plt.subplots(nrows, 1, figsize=(8.5, 3.0 * nrows + 0.6), sharex=True, facecolor=SURF,
+                             gridspec_kw={"height_ratios": [3, 3, 2.4][-nrows:]})
+    axes = list(axes)
+    if full:
+        ax = axes.pop(0)
+        ax.plot(g, L[:, low:], color=MUTED, lw=0.4, alpha=0.35)
+        for k_ in range(low):
+            ax.plot(g, L[:, k_], color=INK if k_ == 0 else JOB_COLOURS[(k_ - 1) % len(JOB_COLOURS)], lw=1.4)
+        ax.set_ylabel(r"$E_k(\Gamma)$", color=INK2)
+        ax.set_title(f"Full spectrum: all {L.shape[1]} levels (lowest {low} coloured)", loc="left",
+                     fontsize=10.5, color=INK2)
+        _clean_axes(ax)
+
+    ax = axes[0]
+    for k_ in range(1, min(low, L.shape[1])):
+        ax.plot(g, L[:, k_] - L[:, 0], lw=2, color=JOB_COLOURS[(k_ - 1) % len(JOB_COLOURS)],
+                label=f"$E_{k_} - E_0$")
+    gc, gap = gap if gap is not None else min_gap(g, L, upper=min(degeneracy, L.shape[1] - 1))
+    ax.scatter([gc], [gap], s=60, color=INK, zorder=5)
+    ax.annotate(f"min gap {gap:.3g}\nat $\\Gamma$ = {gc:.3g}", (gc, gap), xytext=(10, 14),
+                textcoords="offset points", fontsize=9.5, color=INK)
+    ax.set_ylabel("Gap to ground level", color=INK2)
+    span = (L[:, 1:min(low, L.shape[1])] - L[:, :1]).max()
+    if gap > 0 and gap < 0.02 * span:                # tiny gap: log scale so the dip is visible
+        ax.set_yscale("log")
+        ax.set_ylim(gap / 3, span * 2)
+    else:
+        ax.set_ylim(bottom=0)
+    ax.set_title(f"Low eigenspace: lowest {min(low, L.shape[1])} levels", loc="left", fontsize=10.5, color=INK2)
+    ax.legend(frameon=False, fontsize=9, ncol=min(low - 1, 5), loc="upper left")
+    _clean_axes(ax)
+
+    ax = axes[1]
+    if target in sweep["weights"]:
+        ax.plot(g, sweep["weights"][target], color=INK, lw=1.6, ls=(0, (4, 2)), label="ground state (adiabatic)")
+    for i, r in enumerate(runs):
+        ax.plot(r["gammas"], r["probs"][target], lw=2, color=JOB_COLOURS[i % len(JOB_COLOURS)],
+                label=f"anneal T = {r['T']:g}  (final {r['final'][target]:.2f})")
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_ylabel(f"P({target})", color=INK2)
+    ax.set_xlabel(r"Transverse field $\Gamma$  (annealing runs left to right)", color=INK2)
+    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    _clean_axes(ax)
+    ax.set_xlim(g.max(), g.min())                    # shared x: large G on the left
+
+    fig.suptitle(title, x=0.02, ha="left", fontsize=12.5, fontweight="bold", color=INK)
     fig.tight_layout()
     if path:
         fig.savefig(path, dpi=200, facecolor=SURF)

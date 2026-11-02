@@ -1,0 +1,58 @@
+{
+  "name": "nw_n3_m4_s13",
+  "n": 3,
+  "m": 4,
+  "qubits": 9,
+  "p": [
+    [
+      9,
+      8,
+      8,
+      8
+    ],
+    [
+      1,
+      8,
+      9,
+      3
+    ],
+    [
+      2,
+      1,
+      8,
+      9
+    ]
+  ],
+  "P": 6.0,
+  "gamma_max": 12.0,
+  "optimal_makespan": 36,
+  "optimal_sequences": [
+    [
+      "J3",
+      "J2",
+      "J1"
+    ]
+  ],
+  "h_star": 11.0,
+  "threshold_ground_P": 4.0,
+  "min_gap": 0.8325902783617325,
+  "min_gap_gamma": 2.1632018097087347,
+  "anneal": [
+    {
+      "T": 2.0,
+      "P(optimal schedule)": 0.18991611014649512,
+      "P(any feasible schedule)": 0.3580136757319022
+    },
+    {
+      "T": 10.0,
+      "P(optimal schedule)": 0.46132398607443753,
+      "P(any feasible schedule)": 0.6719052678497137
+    },
+    {
+      "T": 50.0,
+      "P(optimal schedule)": 0.9248337016230842,
+      "P(any feasible schedule)": 0.9818355771116866
+    }
+  ],
+  "seconds": 5.5
+}

@@ -13,7 +13,8 @@ pip install -r requirements.txt
 python examples/running_example.py      # walk-through of the report, saves figures in examples/output/
 python -i examples/running_example.py   # same, then explore the object `ex`
 python scripts/make_figures.py          # reproduces all delivered figures in figures/
-python tests/test_report.py             # 21 checks of the propositions and tables
+python scripts/anneal_instances.py      # simulated annealing of instances/ -> figures/anneal/
+python tests/test_report.py             # 24 checks of the propositions, tables and new tools
 ```
 
 ## Layout
@@ -21,15 +22,18 @@ python tests/test_report.py             # 21 checks of the propositions and tabl
 ```
 src/
   instance.py      Instance, loads, bottleneck, heads and tails
+  generator.py     random instances for exact diagonalisation (n <= 4), JSON save/load
   nowait.py        delay D, waste w_b, makespan, decomposition, lower bounds, brute-force optimum
   schedules.py     explicit standard and no-wait schedules (operations, waits, holds, idle gaps)
   qubo.py          one-hot encoding, QUBO class, H_obj, H_pen, H_P, Ising conversion
   spectrum.py      enumeration of all 2^(n^2) states (n <= 4), penalty levels, exact P thresholds
   perturbation.py  kappa, Gamma_c, Sigma_w, flip paths, effective couplings, Landau-Zener
-  quantum.py       exact low spectrum of H(Gamma) = H_P - Gamma * sum sigma^x
-  plotting.py      Gantt comparison figure, low-spectrum plot, penalty-level plot
+  quantum.py       exact spectrum of H(Gamma) = H_P - Gamma * sum sigma^x, annealing dynamics
+  plotting.py      Gantt comparison figure, spectrum plots, annealing figure
 examples/running_example.py   the n = m = 3 instance of the report, all objects in one dataclass
 scripts/make_figures.py       reproduces the figures (PNG, PDF and the interactive HTML page)
+scripts/anneal_instances.py   simulated quantum annealing of every instance in a folder
+instances/                    five generated instances (n = 3 and n = 4)
 tests/test_report.py          checks of Propositions 1-5, Equations 34-36 and Tables 2, 5, 6, 7
 ```
 
@@ -106,8 +110,33 @@ tests/test_report.py          checks of Propositions 1-5, Equations 34-36 and Ta
 there, and the exact spectrum shows no small gap. The example demonstrates the
 tools. Real perturbative crossings need the larger, structured instances of Section 4.
 
+## Random instances and simulated annealing
+
+```bash
+python scripts/anneal_instances.py                       # instances/ -> figures/anneal/<name>/
+python scripts/anneal_instances.py my_folder -o out --T 5 20 200 --P 6
+```
+
+`generator.generate_instance(n, m, seed=...)` draws processing times in `[1, 9]` and,
+by default, redraws until the optimal sequence is unique. `generator.generate_folder`
+writes instances as JSON (`{"name", "n", "m", "p", "seed"}`); the script reads every
+`*.json` in the folder and regenerates its five `DEFAULT_INSTANCES` if the folder is empty.
+
+For each instance the script writes `gantt.png/.pdf` (optimal sequence), `qubo_heatmap.png`,
+`anneal.png` and `summary.json`. The anneal figure shows:
+
+* the full spectrum of `H(Γ)` (n = 3: all 512 levels) or only the lowest levels (n = 4);
+* the gap `E_k − E_0`, with the minimum gap refined between grid points (log scale when tiny);
+* the probability of the optimal schedule: ground-state weight (adiabatic limit) and the
+  result of Schrödinger evolution with `Γ(t) = Γ_max (1 − t/T)`, from the ground state of
+  `H(Γ_max)` (second-order Trotter, `dt = 0.01`).
+
+Defaults: `P = floor(H*_obj / 2) + 1` (just above Proposition 5), `Γ_max = 2P`, `T = 2, 10, 50`.
+Run time: seconds per n = 3 instance, 1–2 minutes per n = 4 instance.
+
 ## Scale limits
 
-* `spectrum` and `quantum`: full Hilbert space, `n <= 4` (16 qubits).
+* `spectrum` and `quantum`: full Hilbert space, `n <= 4` (16 qubits). The full spectrum
+  of `H(Γ)` is computed for n = 3; n = 4 uses the lowest levels (Lanczos, then warm-started LOBPCG).
 * `nowait.optimum` and `all_makespans`: brute force over `n!` sequences, `n <= 9`.
 * `perturbation.flip_paths`: Hamming distance `<= 10`.

@@ -1,0 +1,65 @@
+{
+  "name": "nw_n4_m4_s15",
+  "n": 4,
+  "m": 4,
+  "qubits": 16,
+  "p": [
+    [
+      9,
+      7,
+      7,
+      8
+    ],
+    [
+      3,
+      4,
+      2,
+      1
+    ],
+    [
+      4,
+      6,
+      9,
+      2
+    ],
+    [
+      9,
+      7,
+      5,
+      4
+    ]
+  ],
+  "P": 8.0,
+  "gamma_max": 16.0,
+  "optimal_makespan": 40,
+  "optimal_sequences": [
+    [
+      "J3",
+      "J1",
+      "J4",
+      "J2"
+    ]
+  ],
+  "h_star": 15.0,
+  "threshold_ground_P": 7.5,
+  "min_gap": 0.003537159064663342,
+  "min_gap_gamma": 0.5755896779667317,
+  "anneal": [
+    {
+      "T": 2.0,
+      "P(optimal schedule)": 0.031588670963585176,
+      "P(any feasible schedule)": 0.09047953223484467
+    },
+    {
+      "T": 10.0,
+      "P(optimal schedule)": 0.018892080937603212,
+      "P(any feasible schedule)": 0.0433739926537468
+    },
+    {
+      "T": 50.0,
+      "P(optimal schedule)": 0.0009056069562122737,
+      "P(any feasible schedule)": 0.009959135518638957
+    }
+  ],
+  "seconds": 106.2
+}
