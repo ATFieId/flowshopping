@@ -133,6 +133,73 @@ class QUBO:
             d[(int(a), int(c))] = float(self.quadratic[a, c])
         return d
 
+    def matrix(self) -> np.ndarray:
+        """Upper-triangular matrix Q with ``E(x) = offset + x^T Q x`` (linear terms on the diagonal)."""
+        return self.quadratic + np.diag(self.linear)
+
+    def plot_heatmap(self, n: int | None = None, ax=None, title: str = "QUBO matrix",
+                     annotate: bool | None = None, path: str | None = None):
+        """Heatmap of :meth:`matrix`, coloured blue (negative) to red (positive) around zero.
+
+        ``n``: number of jobs. If given (``n * n == num_qubits``), lines separate the
+        per-job blocks and ticks are labelled ``x[j,k]``.
+        ``annotate``: write each non-zero value in its cell. Defaults to True for <= 16 qubits.
+        Returns the figure; ``path`` also saves it.
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+
+        from .plotting import GRID, INK, INK2, SURF
+
+        N = self.num_qubits
+        if n is not None and n * n != N:
+            raise ValueError(f"n = {n} does not match {N} qubits (expected n * n)")
+        Q = self.matrix()
+        lim = float(np.abs(Q).max()) or 1.0
+        cmap = LinearSegmentedColormap.from_list("qubo", ["#2a78d6", "#f0efec", "#e34948"])
+        cmap.set_bad(SURF)                                    # lower triangle and zero entries
+        shown = np.ma.masked_where(np.tril(np.ones((N, N), bool), -1) | (Q == 0), Q)
+
+        if ax is None:
+            size = min(4 + 0.3 * N, 12)
+            fig, ax = plt.subplots(figsize=(size + 1.2, size), facecolor=SURF)
+        else:
+            fig = ax.figure
+        ax.set_facecolor(SURF)
+        im = ax.imshow(shown, cmap=cmap, norm=TwoSlopeNorm(0, -lim, lim), interpolation="nearest")
+
+        if annotate is None:
+            annotate = N <= 16
+        if annotate:
+            for a, c in zip(*np.nonzero(np.triu(Q))):
+                ax.text(c, a, f"{Q[a, c]:g}", ha="center", va="center", fontsize=7, color=INK)
+
+        if n is not None:
+            for b in range(1, n):                             # job-block boundaries
+                ax.axhline(b * n - 0.5, color=GRID, lw=1)
+                ax.axvline(b * n - 0.5, color=GRID, lw=1)
+            labels = [f"x[{j},{k}]" for j, k in (var_label(n, a) for a in range(N))]
+        else:
+            labels = [str(a) for a in range(N)]
+        step = max(1, N // 24)                                # keep tick labels readable
+        ticks = list(range(0, N, step))
+        ax.set_xticks(ticks, [labels[t] for t in ticks], rotation=90)
+        ax.set_yticks(ticks, [labels[t] for t in ticks])
+        ax.tick_params(colors=INK2, length=0, labelsize=8)
+        ax.xaxis.tick_top()
+        for s in ax.spines.values():
+            s.set_visible(False)
+        ax.set_title(title, loc="left", fontsize=12.5, fontweight="bold", color=INK, pad=12)
+
+        cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+        cb.outline.set_visible(False)
+        cb.ax.tick_params(colors=INK2, length=0, labelsize=8)
+        cb.set_label("Coefficient (diagonal = linear, above = coupler)", color=INK2, fontsize=9)
+
+        if path:
+            fig.savefig(path, dpi=200, facecolor=SURF, bbox_inches="tight")
+        return fig
+
     def to_ising(self) -> tuple[np.ndarray, np.ndarray, float]:
         """Ising form with ``x = (1 - s) / 2``: ``E = offset + h.s + sum_{a<c} J_ac s_a s_c``."""
         Q = self.quadratic

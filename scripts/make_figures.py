@@ -8,6 +8,7 @@ figures/fssp_vs_nowait_gantt.png / .pdf   Gantt comparison (report Figure 1)
 figures/gantt_page.html                   Interactive comparison page (the published artifact)
 figures/low_spectrum.png                  Low spectrum of H(Gamma), running example
 figures/penalty_levels.png                Classical spectrum by penalty level
+figures/qubo_heatmap.png                  QUBO matrix of H_P, running example
 
 The interactive page has text written for the running example. The script checks
 that the instance is the running example before it builds the page.
@@ -80,6 +81,8 @@ def main() -> None:
     plotting.plot_low_spectrum(sweep, title="Running example, P = 3", path=os.path.join(OUT, "low_spectrum.png"))
     plotting.plot_penalty_levels(spectrum.enumerate_spectrum(inst), P, title="All 512 states, P = 3",
                                  path=os.path.join(OUT, "penalty_levels.png"))
+    H_P.plot_heatmap(n=inst.n, title="QUBO matrix of H_P, running example, P = 3",
+                     path=os.path.join(OUT, "qubo_heatmap.png"))
     print("figures written to", os.path.abspath(OUT))
 
 
